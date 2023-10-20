@@ -7,8 +7,12 @@
 #include <vector>
 #include <string>
 #include <functional>
-#include <fstream>
 #include <map>
+
+// Visual Studio does not like fopen.
+#if defined(_MSC_VER)
+#pragma warning (disable : 4996)
+#endif
 
 namespace rw
 {
@@ -22,22 +26,23 @@ namespace rw
 std::string readfile(
 	const char* name,
 	bool openmode_binary = 0,
-	std::streampos start = 0,
-	std::streamsize readsize = -1
+	long start = 0,
+	size_t readsize = -1
 ) {
 	std::string str;
-	std::ifstream f(name, ((openmode_binary) ? std::ios::binary : 1));
+	FILE* f = fopen(name, ((openmode_binary) ? "rb" : "r"));
 
 	if (f) {
 		if (readsize == -1) {
-			f.seekg(0, f.end);
-			str.resize(f.tellg() - start);
+			fseek(f, 0, SEEK_END);
+			str.resize(ftell(f) - start);
 		}
 		else {
 			str.resize(readsize);
 		}
-		f.seekg(start);
-		f.read(str.data(), str.size());
+		fseek(f, start, SEEK_SET);
+		fread(str.data(), 1, str.size(), f);
+		fclose(f);
 	}
 
 	return str;
@@ -49,27 +54,54 @@ std::string readfile(
 // This structure is useful for writing error logs into a text file. When terminate() or abort() is called, data written to existing file streams may not be written to files. This is a problem because when a fatal error occurs in an application, either function is called. No error information is written, so there's no way to diagnose fatal errors!
 struct LogFile
 {
-	const char* filename;
-
 	// Creates the log file.
+	// Note: The log file should not be used if it fails to be opened or created (for some particular reason).
 	LogFile(const char* filename, bool overwrite = false) :
 		filename(filename)
 	{
-		of.open(filename, ((overwrite) ? std::ios::trunc : std::ios::app));
+		f = fopen(filename, ((overwrite) ? "w" : "a"));
 	}
 
-	// Write to the log file.
-	template<typename T>
-	LogFile& operator()(const T& val)
+	// Check if the log file is valid. If not valid, the application itself should reopen the log file.
+	operator bool() const { return f; }
+
+	// Write a double-precision floating point to the log file.
+	LogFile& f64(double val)
 	{
-		of << val;
-		of.close();
-		of.open(filename, std::ios::app);
+		fprintf(f, "%f", val);
+		f = freopen(filename, "a", f); // Self-reopen a.k.a update file immediately.
 		return *this;
 	}
 
+	// Write a 64-bit signed integer to the log file.
+	LogFile& s64(int64_t val)
+	{
+		fprintf(f, "%lld", val);
+		f = freopen(filename, "a", f);
+		return *this;
+	}
+
+	// Write a 64-bit unsigned integer to the log file.
+	LogFile& u64(uint64_t val)
+	{
+		fprintf(f, "%llu", val);
+		f = freopen(filename, "a", f);
+		return *this;
+	}
+
+	// Write string to the log file.
+	LogFile& operator()(const char* str)
+	{
+		fputs(str, f);
+		f = freopen(filename, "a", f);
+		return *this;
+	}
+
+	~LogFile() { fclose(f); }
+
 private:
-	std::ofstream of;
+	FILE* f;
+	const char* filename;
 };
 
 // A read-only stream of data with a position pointer, data pointer and size.
