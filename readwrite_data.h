@@ -167,8 +167,6 @@ struct ReadStream
 struct WriteStream : public std::vector<uint8_t>
 {
 	size_t pos = 0; // Byte position index.
-	size_t bit_pos = 0; // Bit position index.
-	bool writebit_reversed = false; // If true, writebit() writes bits in big-endian order in little-endian systems and vice versa.
 
 	void expand(size_t num_bytes) { resize(size() + num_bytes); }
 
@@ -199,25 +197,6 @@ struct WriteStream : public std::vector<uint8_t>
 
 		for (size_t i = 0; i < writesize; i++, pos++)
 			operator[](pos) = src[i];
-	}
-
-	// Write a bit to the buffer. [bit_pos] is moved forward.
-	// If the current buffer is smaller than the byte position of [bit_pos], the buffer is expanded and [pos] is moved to the end of the buffer.
-	void writebit(bool bit)
-	{
-		size_t byte_pos = bit_pos / 8;
-		size_t byte_bit_pos = bit_pos - byte_pos * 8;
-
-		if (byte_pos >= size()) {
-			resize(byte_pos + 1);
-			pos = size();
-		}
-
-		if (writebit_reversed)
-			byte_bit_pos = 7 - byte_bit_pos;
-
-		operator[](byte_pos) = (operator[](byte_pos) & ~(1 << byte_bit_pos)) | (bit << byte_bit_pos);
-		bit_pos++;
 	}
 };
 
