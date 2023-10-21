@@ -127,7 +127,6 @@ struct ReadStream
 	{
 		T t{};
 		read(&t, sizeof T);
-		pos += sizeof T;
 		return t;
 	}
 
