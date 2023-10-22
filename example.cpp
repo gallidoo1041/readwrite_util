@@ -1,6 +1,6 @@
 ﻿#include <iostream>
 
-#include "readwrite_data.h"
+#include "simple_txt_notation.h"
 
 int main(int argc, char** argv)
 {
@@ -11,7 +11,7 @@ int main(int argc, char** argv)
 		return 0;
 	}
 
-	auto vals = rw::parseSimpleTextNotation(argv[1]);
+	auto vals = stn::parse(argv[1]);
 	for (const auto& val : vals) {
 		std::cout << "attr: " << val.first << ", val: " << val.second << '\n';
 	}
