@@ -7,7 +7,6 @@
 #include <vector>
 #include <string>
 #include <functional>
-#include <map>
 
 // Visual Studio does not like fopen.
 #if defined(_MSC_VER)

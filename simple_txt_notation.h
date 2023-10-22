@@ -2,6 +2,8 @@
 
 #include "readwrite_data.h"
 
+#include <map>
+
 // 0----[|+=============================+]>
 
 // Simple Text Notation format.
