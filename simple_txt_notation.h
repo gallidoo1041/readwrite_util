@@ -78,6 +78,22 @@ hehehe
 */
 //---------------|END
 // 
+// Attributes with the [MULTILINE] tag at the line after their name can have attribute values spanning multiple lines.
+// Such attribute values end with a [END_MULTILINE] tag followed by a newline on the line next to the final line of the attribute.
+// If there is no [END_MULTILINE] tag, or if the last [END_MULTILINE] tag is not followed by a newline, the attribute value spans the end of the file.
+// 
+//---------------|BEGIN
+/*
+attribute1
+[MULTILINE]
+ this is
+ multilined
+[END_MULTILINE]
+
+
+*/
+//---------------|END
+// 
 // [*] Comments:
 // The format supports single line comments, with the following condition:
 // Single-line comments start with a hash (#) character and are allowed before an attribute name:
@@ -101,6 +117,7 @@ attribute2
 // 0----[|+=============================+]>
 
 
+
 namespace stn
 {
 
@@ -108,7 +125,6 @@ namespace stn
 std::map<std::string, std::string> parse(rw::ReadStream rs)
 {
 	std::map<std::string, std::string> attrs;
-
 	std::string key;
 
 	while (rs) {
@@ -126,6 +142,10 @@ std::map<std::string, std::string> parse(rw::ReadStream rs)
 			key = line;
 		}
 		else {
+			if (line == "[MULTILINE]") {
+				line = rs.readUntil(rs.find("\n[END_MULTILINE]\n"));
+			}
+
 			attrs[key] = line;
 			key.clear();
 		}
@@ -141,4 +161,4 @@ std::map<std::string, std::string> parse(const char* filename)
 	return parse({ str.data(), str.size() });
 }
 
-}
+} // |===|   END namespace stn   |===|

@@ -16,6 +16,44 @@
 namespace rw
 {
 
+// Find a sub-sequence in a sequence of objects.
+// Type <T> must have operator==.
+// Returns:
+// - 0 if the sequence is empty.
+// - [container_size] if the sequence is not found.
+// - The location of the first element of the sequence if the sequence is found. 
+template<typename T>
+size_t find_sequence(
+	const T* container_start,
+	size_t container_size,
+	const T* seq_start,
+	size_t seq_size
+) {
+	if (seq_size == 0) {
+		return 0;
+	}
+
+	size_t matched_size = 0;
+	size_t found = 0;
+
+	for (size_t current = 0; current < container_size;) {
+		if (container_start[current++] == seq_start[matched_size]) {
+			matched_size++;
+		}
+		else {
+			matched_size = 0;
+			found = current;
+			continue;
+		}
+
+		if (matched_size == seq_size) {
+			break;
+		}
+	}
+
+	return found;
+}
+
 // Read file as a string and return it.
 // Parameters:
 //   [name] The name of the file.
@@ -46,6 +84,55 @@ std::string readfile(
 
 	return str;
 }
+
+// Create strings by chaining operators.
+struct concat
+{
+	operator const std::string&() const { return str; }
+	operator const char*() const { return str.c_str(); }
+
+	std::exception error() const { return std::exception(str.c_str()); }
+
+	concat(const char* msg = "") { str += msg; }
+	concat(const std::string& msg) { str += msg; }
+
+	// Append string to the string.
+	concat& operator()(const char* msg)
+	{
+		str += msg;
+		return *this;
+	}
+
+	// Append string to the string.
+	concat& operator()(const std::string& msg)
+	{
+		str += msg;
+		return *this;
+	}
+
+	// Append a double-precision floating point to the string.
+	concat& f64(double val)
+	{
+		str += std::to_string(val);
+		return *this;
+	}
+
+	// Append a 64-bit signed integer to the string.
+	concat& s64(int64_t val)
+	{
+		str += std::to_string(val);
+		return *this;
+	}
+
+	// Append a 64-bit unsigned integer to the string.
+	concat& u64(uint64_t val)
+	{
+		str += std::to_string(val);
+		return *this;
+	}
+
+	std::string str;
+};
 
 // A log file structure for error logging.
 // Each write operation reopens the same file, allowing instant update of the file.
@@ -96,6 +183,14 @@ struct LogFile
 		return *this;
 	}
 
+	// Write string to the log file.
+	LogFile& operator()(const std::string& str)
+	{
+		fwrite(str.data(), 1, str.size(), f);
+		f = freopen(filename, "a", f);
+		return *this;
+	}
+
 	~LogFile() { fclose(f); }
 
 private:
@@ -117,8 +212,15 @@ struct ReadStream
 	// Check if the read position pointer is not at or past the end of the stream.
 	operator bool() const { return pos < size; }
 
-	// Read a character, returns 0 if the read position is out of bounds.
-	char getchr() { return (pos < size) ? data[pos++] : 0; }
+	// Find a string in the data, starting from the read position pointer location.
+	// Returns:
+	// - -1 if [str] is empty, or if the read position pointer value is bigger than the size of the stream.
+	// - The size of the stream if [str] is not found.
+	// - The location of the first character of [str] if [str] is found.
+	size_t find(const std::string& str) const
+	{
+		return pos + find_sequence(data + pos, (size < pos) ? 0 : size - pos, str.data(), str.size());
+	}
 
 	// Read a value.
 	template<typename T>
@@ -139,6 +241,19 @@ struct ReadStream
 			dest[i] = data[pos];
 
 		return pos - read;
+	}
+	
+	// Read the data in range [read position pointer; _pos).
+	std::string readUntil(size_t _pos)
+	{
+		if (_pos < pos) {
+			return "";
+		}
+
+		std::string str(_pos - pos, '\0');
+
+		read(str.data(), str.size());
+		return str;
 	}
 
 	// Read the data all the way until [rule] is not met.
