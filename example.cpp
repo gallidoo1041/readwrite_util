@@ -1,6 +1,6 @@
 ﻿#include <iostream>
 
-#include "simple_txt_notation.h"
+#include "readwrite_data.h"
 
 int main(int argc, char** argv)
 {
