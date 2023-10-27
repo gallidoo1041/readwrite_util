@@ -89,9 +89,7 @@ std::string readfile(
 
 // Write log message to an output text file.
 // Parameters:
-//   [append] If true, open the file and append data
-//   [size] (ASCII text only) If -1, write the whole line of text.
-//   [start] The starting position in the file to write the data to. If -1, append data at end of file.
+//   [overwrite] If true, overwrite the file, otherwise append data.
 // Note:
 // This function is useful for writing error logs into a text file. When terminate() or abort() is called, data written to existing file streams may not be written to files. This is a problem because when a fatal error occurs in an application, either function is called. No error information is written, so there's no way to diagnose fatal errors!
 void log(
