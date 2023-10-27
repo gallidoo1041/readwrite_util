@@ -7,6 +7,7 @@
 #include <vector>
 #include <string>
 #include <functional>
+#include <map>
 
 // Visual Studio does not like fopen.
 #if defined(_MSC_VER)
@@ -77,12 +78,45 @@ std::string readfile(
 		else {
 			str.resize(readsize);
 		}
+
 		fseek(f, start, SEEK_SET);
 		fread(str.data(), 1, str.size(), f);
 		fclose(f);
 	}
 
 	return str;
+}
+
+// Write log message to an output text file.
+// Parameters:
+//   [append] If true, open the file and append data
+//   [size] (ASCII text only) If -1, write the whole line of text.
+//   [start] The starting position in the file to write the data to. If -1, append data at end of file.
+// Note:
+// This function is useful for writing error logs into a text file. When terminate() or abort() is called, data written to existing file streams may not be written to files. This is a problem because when a fatal error occurs in an application, either function is called. No error information is written, so there's no way to diagnose fatal errors!
+void log(
+	const char* name,
+	const char* message,
+	bool overwrite = false
+) {
+	FILE* f = fopen(name, ((overwrite) ? "w" : "a"));
+	if (f) {
+		fputs(message, f);
+		fclose(f);
+	}
+}
+
+// Same as log(), but for std::string.
+void log(
+	const char* name,
+	const std::string& message,
+	bool overwrite = false
+) {
+	FILE* f = fopen(name, ((overwrite) ? "w" : "a"));
+	if (f) {
+		fwrite(message.data(), 1, message.size(), f);
+		fclose(f);
+	}
 }
 
 // Create strings by chaining operators.
@@ -110,92 +144,25 @@ struct concat
 		return *this;
 	}
 
-	// Append a double-precision floating point to the string.
-	concat& f64(double val)
+	// Append [count] characters to the string.
+	concat& operator()(char c, size_t count = 1)
 	{
-		str += std::to_string(val);
+		str.resize(count + str.size(), c);
 		return *this;
 	}
-
-	// Append a 64-bit signed integer to the string.
-	concat& s64(int64_t val)
+	
+	// Append a value to the string.
+	// <T> must have 'to_string' function that takes [val] as the parameter and returns std::string.
+	template<typename T>
+	concat& operator()(const T& val)
 	{
-		str += std::to_string(val);
-		return *this;
-	}
+		using std::to_string;
 
-	// Append a 64-bit unsigned integer to the string.
-	concat& u64(uint64_t val)
-	{
-		str += std::to_string(val);
+		str += to_string(val);
 		return *this;
 	}
 
 	std::string str;
-};
-
-// A log file structure for error logging.
-// Each write operation reopens the same file, allowing instant update of the file.
-// Note:
-// This structure is useful for writing error logs into a text file. When terminate() or abort() is called, data written to existing file streams may not be written to files. This is a problem because when a fatal error occurs in an application, either function is called. No error information is written, so there's no way to diagnose fatal errors!
-struct LogFile
-{
-	// Creates the log file.
-	// Note: The log file should not be used if it fails to be opened or created (for some particular reason).
-	LogFile(const char* filename, bool overwrite = false) :
-		filename(filename)
-	{
-		f = fopen(filename, ((overwrite) ? "w" : "a"));
-	}
-
-	// Check if the log file is valid. If not valid, the application itself should reopen the log file.
-	operator bool() const { return f; }
-
-	// Write a double-precision floating point to the log file.
-	LogFile& f64(double val)
-	{
-		fprintf(f, "%f", val);
-		f = freopen(filename, "a", f); // Self-reopen a.k.a update file immediately.
-		return *this;
-	}
-
-	// Write a 64-bit signed integer to the log file.
-	LogFile& s64(int64_t val)
-	{
-		fprintf(f, "%lld", val);
-		f = freopen(filename, "a", f);
-		return *this;
-	}
-
-	// Write a 64-bit unsigned integer to the log file.
-	LogFile& u64(uint64_t val)
-	{
-		fprintf(f, "%llu", val);
-		f = freopen(filename, "a", f);
-		return *this;
-	}
-
-	// Write string to the log file.
-	LogFile& operator()(const char* str)
-	{
-		fputs(str, f);
-		f = freopen(filename, "a", f);
-		return *this;
-	}
-
-	// Write string to the log file.
-	LogFile& operator()(const std::string& str)
-	{
-		fwrite(str.data(), 1, str.size(), f);
-		f = freopen(filename, "a", f);
-		return *this;
-	}
-
-	~LogFile() { fclose(f); }
-
-private:
-	FILE* f;
-	const char* filename;
 };
 
 // A read-only stream of data with a position pointer, data pointer and size.
@@ -315,3 +282,160 @@ struct WriteStream : public std::vector<uint8_t>
 };
 
 } // |===|   END namespace rw   |===|
+
+
+
+namespace stn
+{
+
+// 0----[|+=============================+]>
+
+// Simple Text Notation format.
+//
+// Reason:
+// [*] Creating a quick and very simple text notation format that can easily be understood and implemented.
+// 
+//----|] Specification:
+// [*] Structure:
+// The format is a plain text (.txt) file in ASCII encoding, comprised of attribute-value pairs as follows:
+// 
+//---------------|BEGIN
+/*
+attribute
+attribute_value
+
+attribute2
+attribute_value2
+
+attribute3
+attribute_value3
+
+attribute4
+attribute_value4
+
+...
+*/
+//---------------|END
+// 
+// Attribute names and values are interpreted as strings, and any delimiter or indentation in front of them are treated as part of them.
+// Attributes and their values are separated by 1 newline character.
+// If an attribute value is an empty line, it will be treated as a null value:
+// 
+//---------------|BEGIN
+/*
+attribute
+
+^The line above is an empty line, therefore the attribute value is a null value.
+*/
+//---------------|END
+//
+// Attributes can have duplicate names; in this case, the value of the most recent occurence of that duplicate is the value of that attribute:
+// 
+//---------------|BEGIN
+/*
+attribute1
+hello
+
+attribute1
+world
+^ 'world' is the value of the attribute 'attribute1', not 'hello'
+*/
+//---------------|END
+// 
+// Attribute-value pairs are separated by any number of newline characters:
+// 
+//---------------|BEGIN
+/*
+attribute1
+blablabla
+
+
+
+
+
+
+
+attribute2
+hehehe
+*/
+//---------------|END
+// 
+// Attributes with the [MULTILINE] tag at the line after their name can have attribute values spanning multiple lines.
+// Such attribute values end with a [END_MULTILINE] tag followed by a newline on the line next to the final line of the attribute.
+// If there is no [END_MULTILINE] tag, or if the last [END_MULTILINE] tag is not followed by a newline, the attribute value spans the end of the file.
+// 
+//---------------|BEGIN
+/*
+attribute1
+[MULTILINE]
+ this is
+ multilined
+[END_MULTILINE]
+
+
+*/
+//---------------|END
+// 
+// [*] Comments:
+// The format supports single line comments, with the following condition:
+// Single-line comments start with a hash (#) character and are allowed before an attribute name:
+// 
+//---------------|BEGIN
+/*
+# This is a comment.
+attribute
+attribute_value
+
+attribute2
+# This is an attribute value, not a comment.
+
+		# This is also not a comment, but an attribute.
+		# Trust me!
+*/
+//---------------|END
+//
+//----|] End of Simple Text Notation specification.
+
+// 0----[|+=============================+]>
+
+// Parse simple text (.txt) notation files in memory.
+std::map<std::string, std::string> parse(rw::ReadStream rs)
+{
+	std::map<std::string, std::string> attrs;
+	std::string key;
+
+	while (rs) {
+		std::string line = rs.readWhile([](char c) { return c != '\n'; });
+
+		if (line.empty() || line[0] == '#') {
+			if (!key.empty()) {
+				attrs[key] = line;
+				key.clear();
+			}
+			continue;
+		}
+
+		if (key.empty()) {
+			key = line;
+		}
+		else {
+			if (line == "[MULTILINE]") {
+				line = rs.readUntil(rs.find("\n[END_MULTILINE]\n"));
+			}
+
+			attrs[key] = line;
+			key.clear();
+		}
+	}
+
+	return attrs;
+}
+
+// Parse simple text (.txt) notation files.
+std::map<std::string, std::string> parse(const char* filename)
+{
+	std::string str = rw::readfile(filename);
+	return parse({ str.data(), str.size() });
+}
+
+} // |===|   END namespace stn   |===|
