@@ -55,6 +55,19 @@ size_t find_sequence(
 	return found;
 }
 
+// Check if a file exists.
+bool exists(const char* filename)
+{
+	FILE* f = fopen(filename, "r");
+
+	if (f) {
+		fclose(f);
+		return true;
+	}
+
+	return false;
+}
+
 // Read file as a string and return it.
 // Parameters:
 //   [name] The name of the file.
@@ -87,6 +100,31 @@ std::string readfile(
 	return str;
 }
 
+// Write data to file.
+// Parameters:
+//   [start] The starting position in the file to read from:
+//   - If -1, write at the end of file.
+//   - Otherwise, write from that position.
+//   [truncate] If true, truncate the file, otherwise open the file and overwrite data.
+void writefile(
+	const char* name,
+	void* data,
+	size_t readsize,
+	long start = 0,
+	bool overwrite = true
+) {
+	FILE* f = fopen(name, (overwrite) ? "wb" : "ab");
+
+	if (f) {
+		if (start == -1) {
+			fseek(f, 0, SEEK_END);
+		}
+
+		fwrite(data, 1, readsize, f);
+		fclose(f);
+	}
+}
+
 // Write log message to an output text file.
 // Parameters:
 //   [overwrite] If true, overwrite the file, otherwise append data.
@@ -98,21 +136,9 @@ void log(
 	bool overwrite = false
 ) {
 	FILE* f = fopen(name, ((overwrite) ? "w" : "a"));
+
 	if (f) {
 		fputs(message, f);
-		fclose(f);
-	}
-}
-
-// Same as log(), but for std::string.
-void log(
-	const char* name,
-	const std::string& message,
-	bool overwrite = false
-) {
-	FILE* f = fopen(name, ((overwrite) ? "w" : "a"));
-	if (f) {
-		fwrite(message.data(), 1, message.size(), f);
 		fclose(f);
 	}
 }
@@ -120,7 +146,6 @@ void log(
 // Create strings by chaining operators.
 struct concat
 {
-	operator const std::string&() const { return str; }
 	operator const char*() const { return str.c_str(); }
 
 	std::exception error() const { return std::exception(str.c_str()); }
